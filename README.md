@@ -17,6 +17,16 @@ Set `OPENAI_API_KEY`. To enable traces, also set `LANGFUSE_PUBLIC_KEY`,
 poetry run booking-agent
 ```
 
+For the Streamlit demo interface, run:
+
+```bash
+poetry run streamlit run customer_service_agent/streamlit_app.py
+```
+
+The web demo uses the same environment variables and booking graph as the CLI.
+Each browser session gets an independent conversation thread. Bookings and graph
+state remain in memory and can be lost whenever the app restarts.
+
 Run the test suite with:
 
 ```bash
