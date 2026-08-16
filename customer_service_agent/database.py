@@ -1,4 +1,4 @@
-"""Thread-safe in-memory repository and deterministic location helpers."""
+"""Booking repository protocol, in-memory adapter, and location helpers."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import math
 import threading
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol
 from uuid import uuid4
 
 from customer_service_agent.models import BookingDetails, TimeOption
@@ -37,6 +38,13 @@ class Booking:
     price: float
 
 
+DEFAULT_TECHNICIANS: dict[str, Technician] = {
+    "tech-1": Technician("tech-1", "Aylin", Location(41.015, 28.979)),
+    "tech-2": Technician("tech-2", "Mehmet", Location(41.041, 29.009)),
+    "tech-3": Technician("tech-3", "Deniz", Location(40.991, 29.027)),
+}
+
+
 def geocode(address: str) -> Location:
     """Stable mock geocoder centered around Istanbul (replace in production)."""
     digest = hashlib.sha256(address.strip().lower().encode("utf-8")).digest()
@@ -55,16 +63,28 @@ def distance_km(a: Location, b: Location) -> float:
     return radius * 2 * math.asin(math.sqrt(h))
 
 
+class BookingRepository(Protocol):
+    """Persistence interface used by scheduling and confirmation."""
+
+    @property
+    def technicians(self) -> dict[str, Technician]:
+        """Return technicians keyed by id."""
+
+    def list_bookings(self) -> list[Booking]:
+        """Return all confirmed bookings."""
+
+    def create_booking(
+        self, option: TimeOption, details: BookingDetails, price: float
+    ) -> Booking:
+        """Persist a booking after re-checking overlap; raise ValueError if taken."""
+
+
 class InMemoryBookingRepository:
-    """Minimal repository interface suitable for swapping with a real DB."""
+    """In-process repository for tests and DATABASE_URL-free local runs."""
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self.technicians = {
-            "tech-1": Technician("tech-1", "Aylin", Location(41.015, 28.979)),
-            "tech-2": Technician("tech-2", "Mehmet", Location(41.041, 29.009)),
-            "tech-3": Technician("tech-3", "Deniz", Location(40.991, 29.027)),
-        }
+        self.technicians = dict(DEFAULT_TECHNICIANS)
         self._bookings: list[Booking] = []
 
     def list_bookings(self) -> list[Booking]:
@@ -96,4 +116,3 @@ class InMemoryBookingRepository:
             )
             self._bookings.append(booking)
             return booking
-

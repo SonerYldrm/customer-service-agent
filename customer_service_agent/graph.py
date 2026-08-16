@@ -12,7 +12,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
-from customer_service_agent.database import InMemoryBookingRepository
+from customer_service_agent.database import BookingRepository, InMemoryBookingRepository
 from customer_service_agent.engines import calculate_price, generate_schedule_options
 from customer_service_agent.models import AgentState, BookingDetails
 
@@ -74,7 +74,7 @@ def _conversation(state: AgentState) -> str:
     return "\n".join(lines)
 
 
-def create_nodes(llm: BaseChatModel, repository: InMemoryBookingRepository) -> dict[str, Callable[..., Any]]:
+def create_nodes(llm: BaseChatModel, repository: BookingRepository) -> dict[str, Callable[..., Any]]:
     extractor = llm.with_structured_output(BookingDetails)
     prompt = ChatPromptTemplate.from_template(EXTRACTION_PROMPT)
 
@@ -231,7 +231,7 @@ def route_after_slot(state: AgentState) -> Literal["confirm_booking", "end"]:
 def build_graph(
     llm: BaseChatModel,
     *,
-    repository: InMemoryBookingRepository | None = None,
+    repository: BookingRepository | None = None,
     checkpointer: Any | None = None,
 ) -> Any:
     """Build a compiled, multi-turn booking graph."""
