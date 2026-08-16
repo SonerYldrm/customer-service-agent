@@ -24,6 +24,7 @@ from customer_service_agent.observability import (
     flush_langfuse,
     graph_config,
 )
+from customer_service_agent.persistence import create_persistence
 
 
 def main() -> None:
@@ -32,15 +33,22 @@ def main() -> None:
         raise RuntimeError("OPENAI_API_KEY is required. Copy .env.example to .env.")
 
     llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"), temperature=0)
-    graph = build_graph(llm)
-    langfuse_handler = create_langfuse_handler()
-    config = graph_config(str(uuid4()), langfuse_handler)
-
-    print("Booking assistant ready. Type 'quit' to exit.")
-    if langfuse_handler is not None:
-        print("LangFuse tracing enabled.")
-    first_turn = True
+    persistence = create_persistence()
+    langfuse_handler = None
     try:
+        graph = build_graph(
+            llm,
+            repository=persistence.repository,
+            checkpointer=persistence.checkpointer,
+        )
+        langfuse_handler = create_langfuse_handler()
+        config = graph_config(str(uuid4()), langfuse_handler)
+
+        print("Booking assistant ready. Type 'quit' to exit.")
+        print(f"Persistence backend: {persistence.backend}")
+        if langfuse_handler is not None:
+            print("LangFuse tracing enabled.")
+        first_turn = True
         while True:
             user_text = input("You: ").strip()
             if user_text.lower() in {"quit", "exit"}:
@@ -68,3 +76,8 @@ def main() -> None:
                 break
     finally:
         flush_langfuse(langfuse_handler)
+        persistence.close()
+
+
+if __name__ == "__main__":
+    main()

@@ -19,6 +19,7 @@ from customer_service_agent.observability import (
     flush_langfuse,
     graph_config,
 )
+from customer_service_agent.persistence import PersistenceBundle, create_persistence
 
 
 INITIAL_STATE: AgentState = {
@@ -31,16 +32,31 @@ INITIAL_STATE: AgentState = {
 }
 
 
+@st.cache_resource
+def _shared_runtime() -> tuple[Any, PersistenceBundle]:
+    """One shared graph + Postgres/memory persistence for the Streamlit process."""
+    llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"), temperature=0)
+    persistence = create_persistence()
+    graph = build_graph(
+        llm,
+        repository=persistence.repository,
+        checkpointer=persistence.checkpointer,
+    )
+    return graph, persistence
+
+
 def _initialize_session() -> None:
-    """Create per-browser graph resources and UI state."""
-    if "graph" in st.session_state:
+    """Create per-browser thread state on top of the shared graph."""
+    if "thread_id" in st.session_state:
         return
 
-    llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"), temperature=0)
+    graph, persistence = _shared_runtime()
     handler = create_langfuse_handler()
-    st.session_state.graph = build_graph(llm)
+    st.session_state.graph = graph
+    st.session_state.persistence = persistence
     st.session_state.handler = handler
-    st.session_state.config = graph_config(str(uuid4()), handler)
+    st.session_state.thread_id = str(uuid4())
+    st.session_state.config = graph_config(st.session_state.thread_id, handler)
     st.session_state.agent_state = INITIAL_STATE.copy()
     st.session_state.started = False
 
@@ -70,6 +86,7 @@ def _format_slot(option: TimeOption) -> str:
 
 def _render_summary(state: AgentState) -> None:
     details = state.get("booking_details", BookingDetails())
+    backend = st.session_state.persistence.backend
     with st.sidebar:
         st.header("Booking summary")
         st.write("Service", (details.service_type or "—").replace("_", " ").title())
@@ -81,10 +98,17 @@ def _render_summary(state: AgentState) -> None:
         if state.get("calculated_price") is not None:
             st.metric("Quote", f"${state['calculated_price']:.2f}")
         st.divider()
-        st.caption("Demo only · Bookings are stored in memory and may be lost on restart.")
+        if backend == "postgres":
+            st.caption("Postgres · conversation checkpoints and bookings persist across restarts.")
+        else:
+            st.caption(
+                "In-memory · set DATABASE_URL for durable checkpoints and bookings."
+            )
         if st.button("Start over", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
+            handler = st.session_state.get("handler")
+            flush_langfuse(handler)
+            for key in ("thread_id", "config", "agent_state", "started", "handler"):
+                st.session_state.pop(key, None)
             st.rerun()
 
 
@@ -149,7 +173,15 @@ def main() -> None:
         )
         st.stop()
 
-    _initialize_session()
+    try:
+        _initialize_session()
+    except Exception as exc:
+        st.error(
+            "Could not initialize persistence. Check DATABASE_URL and that Postgres "
+            f"is reachable.\n\n{exc}"
+        )
+        st.stop()
+
     state: AgentState = st.session_state.agent_state
     _render_summary(state)
     _render_messages(state)

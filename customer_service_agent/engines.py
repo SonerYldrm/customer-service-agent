@@ -5,11 +5,7 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from customer_service_agent.database import (
-    InMemoryBookingRepository,
-    distance_km,
-    geocode,
-)
+from customer_service_agent.database import BookingRepository, distance_km, geocode
 from customer_service_agent.models import BookingDetails, TimeOption
 
 ISTANBUL = ZoneInfo("Europe/Istanbul")
@@ -40,7 +36,7 @@ def calculate_price(details: BookingDetails) -> float:
 
 def generate_schedule_options(
     details: BookingDetails,
-    repository: InMemoryBookingRepository,
+    repository: BookingRepository,
     *,
     now: datetime | None = None,
 ) -> list[TimeOption]:

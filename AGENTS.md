@@ -4,8 +4,9 @@
 
 This repository contains a Python customer-service and cleaning-booking agent
 built with LangGraph, LangChain, and Pydantic. Langfuse provides optional
-observability. The application currently uses a terminal interface, an in-memory
-LangGraph checkpointer, and an in-memory booking repository.
+observability. The product surface is a Streamlit UI (plus a CLI). Persistence
+uses Postgres when `DATABASE_URL` is set (LangGraph checkpointer + booking
+repository), and in-memory adapters otherwise.
 
 ## Development Environment
 
@@ -24,9 +25,13 @@ LangGraph checkpointer, and an in-memory booking repository.
 - Keep deterministic pricing and scheduling rules in
   `customer_service_agent/engines.py`.
 - Keep persistence concerns behind the repository in
-  `customer_service_agent/database.py`.
+  `customer_service_agent/database.py` (protocol + in-memory) and
+  `customer_service_agent/postgres.py` (Postgres adapter).
+- Wire checkpointer + repository selection in
+  `customer_service_agent/persistence.py`.
 - Keep Langfuse setup isolated in `customer_service_agent/observability.py`.
 - Keep CLI-specific behavior in `customer_service_agent/cli.py`.
+- Keep the Streamlit product UI in `customer_service_agent/streamlit_app.py`.
 
 ## Implementation Conventions
 
@@ -68,4 +73,4 @@ LangGraph checkpointer, and an in-memory booking repository.
 - Update `README.md` when commands, environment variables, setup steps, or the
   public workflow change.
 - Clearly distinguish current behavior from proposed production extensions such
-  as PostgreSQL, WhatsApp, payments, or staff notifications.
+  as WhatsApp, payments, or staff notifications.
